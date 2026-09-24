@@ -417,7 +417,12 @@ fn ipc_bytes<'a>(request: &'a tauri::ipc::Request) -> Result<&'a [u8], String> {
 /// Open a PDF with the bundled MuPDF library. MuPDF contexts are per thread,
 /// so each blocking task opens its own `Document`.
 fn open_pdf(input: &Path) -> Result<mupdf::Document, String> {
-    mupdf::Document::open(input).map_err(|e| format!("MuPDF couldn't open the PDF: {e}"))
+    // mupdf accepts `Path` only on Unix; `str` works everywhere (on Windows it
+    // converts to UTF-16 internally). Cache paths are always valid UTF-8.
+    let path = input
+        .to_str()
+        .ok_or_else(|| format!("unsupported characters in path {}", input.display()))?;
+    mupdf::Document::open(path).map_err(|e| format!("MuPDF couldn't open the PDF: {e}"))
 }
 
 /// Page sizes in points, in page order (rotation applied; the area is what matters).
