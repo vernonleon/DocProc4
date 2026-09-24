@@ -15,5 +15,9 @@ if (!cli) {
   console.error("Tauri CLI is not installed. Run: npm install");
   process.exit(1);
 }
-const result = spawnSync(process.execPath, [cli, ...process.argv.slice(2)], { stdio: "inherit" });
+// linuxdeploy's bundled `strip` can't read the .relr.dyn sections in newer
+// distros' libraries (e.g. Arch/CachyOS), which makes AppImage bundling fail.
+// Skipping strip only makes the AppImage somewhat larger.
+const env = { NO_STRIP: "true", ...process.env };
+const result = spawnSync(process.execPath, [cli, ...process.argv.slice(2)], { stdio: "inherit", env });
 process.exit(result.status ?? 1);

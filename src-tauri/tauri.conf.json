@@ -29,7 +29,15 @@
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
-      "icons/icon.png"
-    ]
+      "icons/icon.png",
+      "icons/app.icns",
+      "icons/app.ico"
+    ],
+    "publisher": "Vernon Sanders",
+    "copyright": "© 2026 Vernon Sanders",
+    "category": "Productivity",
+    "license": "AGPL-3.0-or-later",
+    "shortDescription": "Turn PDF pages into Markdown with a local vision LLM",
+    "longDescription": "DocProc4 renders PDF pages and sends them to a local OpenAI-compatible vision-language model server (such as Lemonade, LM Studio, or Jan) to transcribe them into Markdown. PDFs, settings, and outputs stay on your machine."
   }
 }

@@ -26,6 +26,18 @@ Requirements: Rust (via rustup), Node.js, a C compiler and clang (MuPDF is built
 
 If the project lives on a mount that can't execute binaries (such as pCloud), keep build output on a local disk. Create `src-tauri/.cargo/config.toml` containing `[build]` and `target-dir = "/absolute/local/path"`. That file is git-ignored because it's machine-specific.
 
+## Installers
+
+`npm run build` builds release installers for the operating system it runs on. On Linux you get `.deb`, `.rpm`, and an AppImage, in `bundle/` under the build output folder (`src-tauri/target/release/`, or your local `target-dir`). Windows installers (`.msi` and a setup `.exe`) have to be built on Windows.
+
+GitHub can build both for you. The **Build installers** workflow (`.github/workflows/build-installers.yml`) runs on GitHub's Linux and Windows machines and attaches every installer to a draft release. To use it:
+
+1. Set the new version in `src-tauri/tauri.conf.json` (keep `src-tauri/Cargo.toml` and `package.json` in step), commit, and push.
+2. Push a matching tag, e.g. `git tag v0.2.0` then `git push origin v0.2.0`, or start it from the repository's **Actions** tab with **Run workflow**.
+3. When it finishes, open **Releases** on GitHub, check the draft, and publish it.
+
+DocProc4 includes MuPDF, which is AGPL-3.0, so installers you give to others are covered by the AGPL (`AGPL-3.0-or-later`). Share the source with anyone you give the app to.
+
 ## Portable copy
 
 The source is in git, with dependencies and build output ignored. To make a clean archive of the last commit:

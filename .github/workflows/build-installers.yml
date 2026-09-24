@@ -1,0 +1,68 @@
+name: Build installers
+
+# Builds the Linux (.deb, .rpm, AppImage) and Windows (.msi, setup .exe)
+# installers and attaches them to a draft GitHub Release named after the
+# version in src-tauri/tauri.conf.json. Review the draft, then publish it.
+#
+# Start it by pushing a version tag:   git tag v0.1.0 && git push origin v0.1.0
+# or from GitHub: Actions tab → Build installers → Run workflow.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write # create the draft release and upload installers
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # The oldest supported Ubuntu, so the Linux packages run on more distros.
+          - platform: ubuntu-22.04
+          - platform: windows-latest
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install Linux build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          # Tauri (WebKitGTK and friends), AppImage tooling, and clang + fontconfig for MuPDF
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev \
+            librsvg2-dev libxdo-dev libssl-dev patchelf file \
+            clang libclang-dev libfontconfig1-dev
+
+      - name: Point MuPDF's build at LLVM (Windows)
+        if: runner.os == 'Windows'
+        run: '"LIBCLANG_PATH=C:\Program Files\LLVM\bin" | Out-File -FilePath $env:GITHUB_ENV -Append'
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: lts/*
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "./src-tauri -> target"
+
+      - run: npm ci
+
+      - uses: tauri-apps/tauri-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tauriScript: npx tauri
+          tagName: v__VERSION__
+          releaseName: DocProc4 v__VERSION__
+          releaseBody: |
+            Linux: .deb (Debian/Ubuntu), .rpm (Fedora/openSUSE), or the AppImage (any distro).
+            Windows: the .msi or the setup .exe.
+            DocProc4 needs a local OpenAI-compatible vision model server (e.g. Lemonade, LM Studio, Jan).
+          releaseDraft: true
+          prerelease: false

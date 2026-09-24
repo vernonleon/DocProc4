@@ -2,6 +2,8 @@
 name = "docproc4"
 version = "0.1.0"
 description = "PDF to Markdown via local OpenAI-compatible vision LLM servers"
+authors = ["Vernon Sanders"]
+license = "AGPL-3.0-or-later"
 edition = "2021"
 
 [build-dependencies]
