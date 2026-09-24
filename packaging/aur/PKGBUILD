@@ -1,0 +1,53 @@
+# Maintainer: Vernon Sanders <vernonleon at gmail dot com>
+
+pkgname=docproc4
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="Turn PDF pages into Markdown with a local vision LLM"
+arch=('x86_64')
+url="https://github.com/vernonleon/DocProc4"
+license=('AGPL-3.0-or-later')
+depends=('webkit2gtk-4.1' 'gtk3' 'glib2' 'cairo' 'gdk-pixbuf2' 'libsoup3' 'wayland' 'dbus'
+         'fontconfig' 'hicolor-icon-theme' 'libgcc' 'glibc')
+makedepends=('git' 'cargo' 'nodejs' 'npm' 'clang')
+# Rust and C (MuPDF) objects are linked together; makepkg's LTO flags break that.
+options=('!lto')
+source=("$pkgname::git+https://github.com/vernonleon/DocProc4.git#tag=v${pkgver}")
+sha256sums=('SKIP')
+
+prepare() {
+  cd "$pkgname"
+  # Fetch everything now so build() can run offline.
+  npm ci
+  export RUSTUP_TOOLCHAIN=stable
+  cargo fetch --locked --manifest-path src-tauri/Cargo.toml \
+    --target "$(rustc -vV | sed -n 's/host: //p')"
+}
+
+build() {
+  cd "$pkgname"
+  export RUSTUP_TOOLCHAIN=stable
+  export CARGO_TARGET_DIR="$srcdir/target"
+  # The Tauri CLI embeds the web UI into the binary; --no-bundle skips installers.
+  npx --no-install tauri build --no-bundle -- --frozen
+}
+
+package() {
+  cd "$pkgname"
+  install -Dm755 "$srcdir/target/release/docproc4" "$pkgdir/usr/bin/docproc4"
+  install -Dm644 /dev/stdin "$pkgdir/usr/share/applications/docproc4.desktop" <<EOF
+[Desktop Entry]
+Type=Application
+Name=DocProc4
+Comment=$pkgdesc
+Exec=docproc4
+Icon=docproc4
+Terminal=false
+Categories=Office;Utility;
+EOF
+  install -Dm644 src-tauri/icons/32x32.png "$pkgdir/usr/share/icons/hicolor/32x32/apps/docproc4.png"
+  install -Dm644 src-tauri/icons/128x128.png "$pkgdir/usr/share/icons/hicolor/128x128/apps/docproc4.png"
+  install -Dm644 src-tauri/icons/512x512.png "$pkgdir/usr/share/icons/hicolor/512x512/apps/docproc4.png"
+  install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+  install -Dm644 README.md "$pkgdir/usr/share/doc/$pkgname/README.md"
+}

@@ -10,3 +10,9 @@ src-tauri/.cargo/
 
 # pCloud sync-conflict copies
 *\[conflicted\]*
+
+# makepkg output in packaging/aur (sources, build dirs, packages)
+packaging/aur/docproc4/
+packaging/aur/src/
+packaging/aur/pkg/
+packaging/aur/*.pkg.tar.*

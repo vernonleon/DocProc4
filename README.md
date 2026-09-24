@@ -38,6 +38,8 @@ GitHub can build both for you. The **Build installers** workflow (`.github/workf
 
 DocProc4 includes MuPDF, which is AGPL-3.0, so installers you give to others are covered by the AGPL (`AGPL-3.0-or-later`). Share the source with anyone you give the app to.
 
+On Arch-based systems (including CachyOS), `packaging/aur/` has a PKGBUILD that installs DocProc4 as a regular package. See `packaging/aur/README.md`.
+
 ## Portable copy
 
 The source is in git, with dependencies and build output ignored. To make a clean archive of the last commit:

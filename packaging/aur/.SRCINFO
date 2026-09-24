@@ -1,0 +1,29 @@
+pkgbase = docproc4
+	pkgdesc = Turn PDF pages into Markdown with a local vision LLM
+	pkgver = 0.1.0
+	pkgrel = 1
+	url = https://github.com/vernonleon/DocProc4
+	arch = x86_64
+	license = AGPL-3.0-or-later
+	makedepends = git
+	makedepends = cargo
+	makedepends = nodejs
+	makedepends = npm
+	makedepends = clang
+	depends = webkit2gtk-4.1
+	depends = gtk3
+	depends = glib2
+	depends = cairo
+	depends = gdk-pixbuf2
+	depends = libsoup3
+	depends = wayland
+	depends = dbus
+	depends = fontconfig
+	depends = hicolor-icon-theme
+	depends = libgcc
+	depends = glibc
+	options = !lto
+	source = docproc4::git+https://github.com/vernonleon/DocProc4.git#tag=v0.1.0
+	sha256sums = SKIP
+
+pkgname = docproc4
