@@ -1,0 +1,14 @@
+{
+  "name": "docproc4",
+  "version": "0.1.0",
+  "private": true,
+  "description": "PDF to Markdown via local vision LLMs",
+  "scripts": {
+    "dev": "node scripts/tauri-local.js dev",
+    "build": "node scripts/tauri-local.js build",
+    "start": "cargo run --manifest-path src-tauri/Cargo.toml"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2"
+  }
+}

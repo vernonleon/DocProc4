@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="cyberpunk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DocProc4</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header id="topbar">
+  <span id="app-title">DocProc4</span>
+  <nav id="tabs">
+    <button class="tab-btn active" data-tab="tab1">1 · Upload &amp; Instructions</button>
+    <button class="tab-btn" data-tab="tab2">2 · Batching</button>
+    <button class="tab-btn" data-tab="tab3">3 · LLM Config</button>
+    <button class="tab-btn" data-tab="tab4">4 · Run &amp; Outputs</button>
+  </nav>
+  <select id="theme-select" title="Theme">
+    <option value="light">Light</option>
+    <option value="dark">Dark</option>
+    <option value="retrowave">Retrowave</option>
+    <option value="matrix">Matrix</option>
+    <option value="cyberpunk" selected>Cyberpunk</option>
+  </select>
+</header>
+
+<main>
+
+  <!-- ============ TAB 1: Upload & Instructions ============ -->
+  <section id="tab1" class="tab-panel active">
+    <div class="panel">
+      <h2>PDF Source</h2>
+      <div class="row">
+        <button id="btn-open-pdf" class="btn">Open PDF…</button>
+        <input type="file" id="pdf-input" accept=".pdf,application/pdf" hidden>
+        <span id="pdf-name" class="muted">no file loaded</span>
+      </div>
+      <div class="row">
+        <label for="dpi-input">DPI</label>
+        <input type="number" id="dpi-input" min="72" max="600" step="1" value="300">
+        <span class="muted" id="page-count"></span>
+      </div>
+    </div>
+
+    <div class="panel grow">
+      <h2>Instructions</h2>
+      <div class="row">
+        <button id="btn-open-md" class="btn">Open .md…</button>
+        <input type="file" id="md-input" accept=".md,.markdown,text/markdown" hidden>
+        <select id="instruction-select"><option value="">— saved sets —</option></select>
+        <button id="btn-save-instruction" class="btn">Save as…</button>
+        <button id="btn-delete-instruction" class="btn danger">Delete set</button>
+      </div>
+      <textarea id="instruction-editor" placeholder="Type or load an instruction prompt…"></textarea>
+    </div>
+  </section>
+
+  <!-- ============ TAB 2: Batching ============ -->
+  <section id="tab2" class="tab-panel">
+    <div class="panel">
+      <div class="row">
+        <h2>Batch Mode</h2>
+        <label><input type="radio" name="batch-mode" value="fixed" checked> Fixed size</label>
+        <input type="number" id="fixed-n" min="1" max="20" value="3">
+        <label><input type="radio" name="batch-mode" value="visual"> Visual</label>
+      </div>
+      <div id="batch-pills" class="pills-strip"></div>
+    </div>
+    <div class="panel grow">
+      <div class="row">
+        <h2>Pages <span class="muted" id="thumb-summary"></span></h2>
+        <span class="muted" id="visual-hint" hidden>Click thumbnails to add to the current batch</span>
+        <span class="spacer"></span>
+        <button id="btn-next-batch" class="btn" hidden>Next Batch</button>
+        <button id="btn-clear-batches" class="btn danger" hidden>Clear batches</button>
+      </div>
+      <div id="thumb-strip" class="scroll"></div>
+    </div>
+  </section>
+
+  <!-- ============ TAB 3: LLM Config ============ -->
+  <section id="tab3" class="tab-panel">
+    <div class="panel">
+      <h2>Server</h2>
+      <div class="row">
+        <label for="base-url">Base URL</label>
+        <input type="text" id="base-url" value="http://localhost:13305">
+        <button id="btn-health" class="btn">Check health</button>
+        <span id="health-pill" class="pill unknown">unknown</span>
+      </div>
+      <div class="row">
+        <label for="api-key">API key</label>
+        <input type="password" id="api-key" placeholder="(optional)">
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Model</h2>
+      <div class="row">
+        <button id="btn-fetch-models" class="btn">Fetch models</button>
+        <select id="model-select"><option value="">— fetch first —</option></select>
+        <button id="btn-load-model" class="btn">Load</button>
+        <button id="btn-unload-model" class="btn danger">Unload</button>
+        <span id="loaded-pill" class="pill off">none loaded</span>
+      </div>
+      <div class="row">
+        <span id="loaded-info" class="muted small"></span>
+      </div>
+    </div>
+
+    <div class="panel grow">
+      <h2>Parameters</h2>
+      <div id="param-grid">
+        <label>Temperature <input type="number" id="p-temp" min="0" max="2" step="0.05" value="0.7"></label>
+        <label>Top K <input type="number" id="p-topk" min="0" max="200" step="1" value="40"></label>
+        <label>Top P <input type="number" id="p-topp" min="0" max="1" step="0.05" value="0.9"></label>
+        <label>Min P <input type="number" id="p-minp" min="0" max="1" step="0.01" value="0.05"></label>
+        <label>Concurrent evaluations <input type="number" id="p-conc" min="1" max="8" step="1" value="2"></label>
+        <label class="check"><input type="checkbox" id="p-thinking" checked> Thinking (reasoning)</label>
+      </div>
+      <div class="row">
+        <span class="muted small">host usage (live):</span>
+        <span id="sys-stats" class="sys-stats">RAM — · VRAM — · GPU —</span>
+      </div>
+      <p class="muted small">Context size and output length are taken from the server-side model load. Settings are saved automatically and restored on next launch.</p>
+    </div>
+  </section>
+
+  <!-- ============ TAB 4: Run & Outputs ============ -->
+  <section id="tab4" class="tab-panel">
+    <div class="panel">
+      <h2>Run</h2>
+      <div class="row">
+        <button id="btn-start" class="btn primary">Start</button>
+        <button id="btn-cancel-all" class="btn danger" disabled>Cancel all</button>
+        <button id="btn-rerun" class="btn" disabled>Re-run failed</button>
+        <span id="run-status" class="muted">idle</span>
+      </div>
+      <div class="row">
+        <label><input type="radio" name="save-mode" value="merged" checked> Single file</label>
+        <label><input type="radio" name="save-mode" value="perbatch"> Per-batch files</label>
+        <span id="save-preview" class="muted small"></span>
+        <button id="btn-save" class="btn" disabled>Save output…</button>
+      </div>
+      <p class="muted small">Outputs are not persisted — they are cleared when a new run starts or the app closes.</p>
+    </div>
+    <div class="panel grow">
+      <h2>Batch outputs</h2>
+      <div id="run-panels" class="scroll"><p class="muted">No run yet.</p></div>
+    </div>
+  </section>
+
+</main>
+
+<div id="lightbox" hidden><img id="lightbox-img" alt="page preview"></div>
+
+<script src="stub.js"></script>
+<script src="real-backend.js"></script>
+<script src="backend.js"></script>
+<script src="e2e-boot.js"></script><script src="app.js"></script>
+</body>
+</html>

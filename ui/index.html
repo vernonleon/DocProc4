@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="cyberpunk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DocProc4</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header id="topbar">
+  <div id="brand" title="DocProc4 — PDF pages to Markdown with a local vision model">
+    <svg class="logo" viewBox="0 0 28 28" aria-hidden="true">
+      <path class="logo-page" d="M6 3.5h11l5.5 5.5v15.5a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1v-20a1 1 0 0 1 1-1z"/>
+      <path class="logo-fold" d="M17 3.5V9h5.5"/>
+      <path class="logo-lines" d="M8.5 11.5h7M8.5 14.5h9M8.5 17.5h5"/>
+      <path class="logo-arrow" d="M19.5 15.5v7m-3-3 3 3 3-3"/>
+    </svg>
+    <span class="wordmark">DocProc<span class="wordmark-4">4</span></span>
+  </div>
+
+  <nav id="tabs" aria-label="Steps">
+    <button class="tab-btn step active" data-tab="tab1">
+      <span class="step-dot" data-n="1"></span>
+      <span class="step-text"><span class="step-label">Upload</span><span class="step-sub" id="step1-sub">no PDF yet</span></span>
+    </button>
+    <span class="step-line"></span>
+    <button class="tab-btn step" data-tab="tab2">
+      <span class="step-dot" data-n="2"></span>
+      <span class="step-text"><span class="step-label">Batching</span><span class="step-sub" id="step2-sub">—</span></span>
+    </button>
+    <span class="step-line"></span>
+    <button class="tab-btn step" data-tab="tab3">
+      <span class="step-dot" data-n="3"></span>
+      <span class="step-text"><span class="step-label">LLM Config</span><span class="step-sub" id="step3-sub">not checked</span></span>
+    </button>
+    <span class="step-line"></span>
+    <button class="tab-btn step" data-tab="tab4">
+      <span class="step-dot" data-n="4"></span>
+      <span class="step-text"><span class="step-label">Run &amp; Outputs</span><span class="step-sub" id="step4-sub">idle</span></span>
+    </button>
+  </nav>
+
+  <div id="mode-toggle" role="radiogroup" aria-label="Processing mode">
+    <button class="mode-btn" data-mode="fast" role="radio" title="Fast: renders every page at full size as soon as the PDF loads, into /tmp. Quickest, but uses the most memory.">
+      <svg class="mode-icon" viewBox="0 0 24 24" aria-hidden="true">
+        <ellipse cx="14.6" cy="5.8" rx="1.35" ry="3.9" transform="rotate(-12 14.6 5.8)"/>
+        <ellipse cx="17.7" cy="6.1" rx="1.35" ry="3.9" transform="rotate(16 17.7 6.1)"/>
+        <ellipse class="inner" cx="14.6" cy="5.6" rx=".55" ry="2.6" transform="rotate(-12 14.6 5.6)"/>
+        <ellipse class="inner" cx="17.7" cy="5.9" rx=".55" ry="2.6" transform="rotate(16 17.7 5.9)"/>
+        <ellipse cx="10" cy="16.4" rx="6.6" ry="4.9"/>
+        <circle cx="16.3" cy="11.9" r="3.7"/>
+        <circle cx="3.5" cy="14.8" r="2"/>
+        <ellipse cx="15.6" cy="20.7" rx="2.1" ry="1.05"/>
+        <circle class="eye" cx="17.5" cy="11.3" r=".8"/>
+        <circle class="blush" cx="18.4" cy="13.2" r=".75"/>
+      </svg>
+      <span class="mode-label">Fast</span>
+    </button>
+    <button class="mode-btn" data-mode="efficient" role="radio" title="Efficient: only thumbnails render up front, on disk. Full-size pages render one at a time just before they're sent, then get deleted. Slower, much lighter on memory.">
+      <svg class="mode-icon" viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M3.2 16.2 L0.9 17.3 L3.4 17.6 Z"/>
+        <rect x="4.8" y="15.6" width="3.2" height="4" rx="1.3"/>
+        <rect x="13.4" y="15.6" width="3.2" height="4" rx="1.3"/>
+        <rect x="17" y="12.6" width="3.2" height="3.2" rx="1.2"/>
+        <circle cx="20.4" cy="12.7" r="2.5"/>
+        <path d="M2.6 16 C2.6 10.6 6.5 7.4 10.7 7.4 C14.9 7.4 18.8 10.6 18.8 16 Z"/>
+        <rect x="1.8" y="15.1" width="17.8" height="1.9" rx=".95"/>
+        <path class="inner" d="M8.7 11.6 L10.7 10.4 L12.7 11.6 L12.7 13.9 L10.7 15.1 L8.7 13.9 Z"/>
+        <circle class="eye" cx="21.2" cy="12.1" r=".7"/>
+        <circle class="blush" cx="21.3" cy="13.7" r=".65"/>
+      </svg>
+      <span class="mode-label">Efficient</span>
+    </button>
+  </div>
+
+  <select id="theme-select" title="Theme">
+    <option value="light">Light</option>
+    <option value="dark">Dark</option>
+    <option value="retrowave">Retrowave</option>
+    <option value="matrix">Matrix</option>
+    <option value="cyberpunk" selected>Cyberpunk</option>
+  </select>
+</header>
+
+<main>
+
+  <!-- ============ TAB 1: Upload & Instructions ============ -->
+  <section id="tab1" class="tab-panel active">
+    <div class="panel">
+      <h2>PDF Source</h2>
+      <input type="file" id="pdf-input" accept=".pdf,application/pdf" hidden>
+      <button id="dropzone" class="dropzone" type="button">
+        <svg class="dz-icon" viewBox="0 0 48 48" aria-hidden="true">
+          <path d="M12 5h17l9 9v27a2 2 0 0 1-2 2H12a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z"/>
+          <path d="M29 5v9h9"/>
+          <path class="dz-arrow" d="M24 36V21m-6 6 6-6 6 6"/>
+        </svg>
+        <span class="dz-text">
+          <strong>Drop a PDF here</strong>
+          <span class="muted">or click to browse. You can also drop a .md file to use as instructions.</span>
+        </span>
+      </button>
+      <div id="pdf-card" class="file-card" hidden>
+        <svg class="fc-icon" viewBox="0 0 48 48" aria-hidden="true">
+          <path d="M12 5h17l9 9v27a2 2 0 0 1-2 2H12a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z"/>
+          <path d="M29 5v9h9"/>
+          <text x="24" y="34" text-anchor="middle">PDF</text>
+        </svg>
+        <div class="fc-meta">
+          <div id="pdf-name" class="fc-name">no file loaded</div>
+          <div class="fc-sub"><span class="spinner" id="pdf-spinner" hidden></span><span id="page-count" class="muted"></span></div>
+        </div>
+        <button id="btn-open-pdf" class="btn">Change…</button>
+      </div>
+      <div class="row">
+        <span id="render-note" class="muted small" title="The resolution is chosen automatically so each page uses the loaded model's full image token budget."></span>
+      </div>
+      <div class="row">
+        <span id="mode-note" class="muted small"></span>
+      </div>
+    </div>
+
+    <div class="panel grow">
+      <div class="row">
+        <h2>Instructions</h2>
+        <span class="spacer"></span>
+        <button id="btn-open-md" class="btn">Open .md…</button>
+        <input type="file" id="md-input" accept=".md,.markdown,.txt,text/markdown,text/plain" hidden>
+        <select id="instruction-select"><option value="">— saved sets —</option></select>
+        <button id="btn-save-instruction" class="btn">Save as…</button>
+        <button id="btn-delete-instruction" class="btn danger">Delete set</button>
+      </div>
+      <textarea id="instruction-editor" placeholder="Tell the model how to transcribe each page. For example: Transcribe these pages to Markdown in reading order. Keep headings, lists, and tables."></textarea>
+    </div>
+  </section>
+
+  <!-- ============ TAB 2: Batching ============ -->
+  <section id="tab2" class="tab-panel">
+    <div class="panel">
+      <div class="row">
+        <h2>Batch Mode</h2>
+        <div class="seg" role="radiogroup" aria-label="Batch mode">
+          <label><input type="radio" name="batch-mode" value="fixed" checked><span>Fixed size</span></label>
+          <label><input type="radio" name="batch-mode" value="visual"><span>Visual</span></label>
+        </div>
+        <label class="field" id="fixed-n-field">Pages per batch <input type="number" id="fixed-n" min="1" max="20" value="3"></label>
+        <span class="spacer"></span>
+        <button id="btn-next-batch" class="btn" hidden>Next batch</button>
+        <button id="btn-clear-batches" class="btn danger" hidden>Clear batches</button>
+      </div>
+      <div id="batch-pills" class="pills-strip"></div>
+    </div>
+    <div class="panel grow">
+      <div class="row">
+        <h2>Pages <span class="muted count" id="thumb-summary"></span></h2>
+        <span class="muted small" id="visual-hint" hidden>Click a page to add or remove it · drag across pages to select a range · Shift-click to extend</span>
+        <span class="spacer"></span>
+        <label class="thumb-zoom" title="Changes thumbnail size only; it does not change system display or cursor settings.">Size <input type="range" id="batch-zoom" min="100" max="320" step="10" value="165"><output id="batch-zoom-value">165 px</output></label>
+      </div>
+      <div id="thumb-strip" class="scroll"></div>
+      <div id="thumb-empty" class="empty">
+        <svg class="empty-icon" viewBox="0 0 64 64" aria-hidden="true">
+          <rect x="10" y="14" width="20" height="26" rx="2"/>
+          <rect x="22" y="10" width="20" height="26" rx="2"/>
+          <rect x="34" y="18" width="20" height="26" rx="2"/>
+          <path d="M18 52h28"/>
+        </svg>
+        <strong>No pages yet</strong>
+        <span class="muted">Load a PDF in step 1 and its pages will show up here.</span>
+        <button class="btn" data-goto="tab1">Go to Upload</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ TAB 3: LLM Config ============ -->
+  <section id="tab3" class="tab-panel scroll-panel">
+    <div class="panel">
+      <h2>Server</h2>
+      <div class="row">
+        <label class="field" for="base-url">Base URL <input type="text" id="base-url" value="http://localhost:13305" placeholder="http://127.0.0.1:1337 or …/v1" title="Server root or an OpenAI /v1 URL. Both forms are accepted."></label>
+        <button id="btn-health" class="btn">Check health</button>
+        <span id="health-pill" class="pill unknown">unknown</span>
+      </div>
+      <div class="row">
+        <label class="field" for="api-key">API key <input type="password" id="api-key" placeholder="(optional)"></label>
+      </div>
+      <div class="row">
+        <span class="muted small">This computer:</span>
+        <span id="sys-stats" class="sys-stats">CPU — · RAM — · VRAM — · GPU —</span>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Model</h2>
+      <div class="row">
+        <button id="btn-fetch-models" class="btn">Fetch models</button>
+        <select id="model-select"><option value="">— fetch first —</option></select>
+        <button id="btn-load-model" class="btn">Load</button>
+        <button id="btn-unload-model" class="btn danger">Unload</button>
+        <span id="loaded-pill" class="pill off">none loaded</span>
+      </div>
+      <div class="row">
+        <span id="loaded-info" class="muted small"></span>
+      </div>
+      <div class="row">
+        <span id="budget-info" class="muted small">Image budget: not measured yet.</span>
+        <button id="btn-measure" class="btn" title="Send a few test images to the loaded model to measure how many pixels it can use per image. Takes a few seconds.">Re-measure</button>
+      </div>
+    </div>
+
+    <div class="panel card" data-card="load">
+      <div class="row card-head">
+        <button class="collapse-btn" aria-expanded="true" title="Collapse or expand"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 6l4 4 4-4"/></svg></button>
+        <h2 class="card-title">llama.cpp Load Options</h2>
+        <span class="card-summary" id="lc-summary"></span>
+        <span class="spacer"></span>
+        <select id="load-preset" title="Saved load-option presets"><option value="">— saved presets —</option></select>
+        <button id="btn-load-preset-save" class="btn">Save as…</button>
+        <button id="btn-load-preset-delete" class="btn danger">Delete</button>
+      </div>
+      <div class="card-body">
+        <div class="row">
+          <label class="field" title="Batches sent at once. When llama.cpp options are sent, this also sets the server's --parallel slots.">Concurrent evaluations <input type="number" id="lc-conc" min="1" max="8" step="1" value="2"></label>
+          <label class="field" title="Sent with each request, so no reload is needed. Model default sends nothing.">Thinking effort
+            <select id="lc-thinking">
+              <option value="">Model default</option>
+              <option value="none">None</option>
+              <option value="qwen-none">None (Qwen 3)</option>
+              <option value="low">Low</option>
+              <option value="medium">Medium</option>
+              <option value="high">High</option>
+              <option value="xhigh">X-High</option>
+            </select>
+          </label>
+          <span id="lc-thinking-note" class="muted small"></span>
+        </div>
+        <div class="row sampling-switch">
+          <label class="check" title="Off: Load sends only the model name. On: the options below are sent to the server's /v1/load (Lemonade). Servers without model loading ignore them."><input type="checkbox" id="lc-enabled"> Send llama.cpp options when loading</label>
+          <span id="lc-status" class="muted small">Server/model defaults will be used</span>
+        </div>
+        <div id="lc-grid">
+          <label class="lc-opt" title="Blank = server default. -1 = automatic sizing. Shared across the parallel slots.">Context size <input type="number" id="lc-ctx" min="-1" step="1024" placeholder="default"></label>
+          <label class="lc-opt">Backend
+            <select id="lc-backend">
+              <option value="">server default</option>
+              <option value="vulkan">vulkan</option>
+              <option value="rocm">rocm</option>
+              <option value="metal">metal</option>
+              <option value="cpu">cpu</option>
+            </select>
+          </label>
+          <label class="lc-opt check" title="On: your args are added to the server's backend/machine args. Off: only your args are used."><input type="checkbox" id="lc-merge" checked> Merge with server args</label>
+          <label class="lc-opt check" title="Asks the server to remember these options as this model's defaults (recipe_options.json)."><input type="checkbox" id="lc-save"> Save as model default</label>
+        </div>
+        <div class="row">
+          <label for="lc-args" class="lc-opt">Extra args</label>
+          <input type="text" id="lc-args" class="lc-opt" placeholder="--flash-attn on --cache-type-k q8_0 --cache-type-v q8_0" spellcheck="false">
+        </div>
+        <div class="row">
+          <span id="lc-hint" class="muted small">Extra flags for llama-server. Context size and --parallel come from the fields above. The server sets -m, --port, -ngl, --jinja, and --mmproj itself. Click Load to apply changes.</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel card" data-card="params">
+      <div class="row card-head">
+        <button class="collapse-btn" aria-expanded="true" title="Collapse or expand"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 6l4 4 4-4"/></svg></button>
+        <h2 class="card-title">Parameters</h2>
+        <span class="card-summary" id="param-summary"></span>
+        <span class="spacer"></span>
+        <select id="param-preset" title="Saved parameter presets"><option value="">— saved presets —</option></select>
+        <button id="btn-param-preset-save" class="btn">Save as…</button>
+        <button id="btn-param-preset-delete" class="btn danger">Delete</button>
+      </div>
+      <div class="card-body">
+        <div class="row sampling-switch">
+          <label class="check" title="Off: requests contain only model, messages/images, and stream. On: the six sampling values below are included."><input type="checkbox" id="p-send-params"> Use custom sampling parameters</label>
+          <span id="sampling-status" class="muted small">Server/model defaults will be used</span>
+        </div>
+        <div id="param-grid">
+          <label class="sampling-param">Temperature <input type="number" id="p-temp" min="0" max="2" step="0.05" value="0.7"></label>
+          <label class="sampling-param">Top K <input type="number" id="p-topk" min="0" max="200" step="1" value="40"></label>
+          <label class="sampling-param">Top P <input type="number" id="p-topp" min="0" max="1" step="0.05" value="0.9"></label>
+          <label class="sampling-param">Min P <input type="number" id="p-minp" min="0" max="1" step="0.01" value="0.05"></label>
+          <label class="sampling-param" title="Values above 1 discourage the model from repeating recently generated tokens.">Repeat penalty <input type="number" id="p-repeat-penalty" min="0" max="2" step="0.05" value="1.1"></label>
+          <label class="sampling-param" title="Positive values discourage reusing content already present in the response.">Presence penalty <input type="number" id="p-presence-penalty" min="-2" max="2" step="0.05" value="0"></label>
+          <label class="sampling-param" title="The same seed with the same settings and pages gives repeatable sampling. Leave blank for a random seed on every request.">Seed <input type="number" id="p-seed" min="0" step="1" placeholder="random"></label>
+        </div>
+        <p class="muted small">Context size and output length come from the server unless you override them in llama.cpp Load Options. Settings are saved automatically and restored on next launch.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ TAB 4: Run & Outputs ============ -->
+  <section id="tab4" class="tab-panel">
+    <div class="panel">
+      <div class="row">
+        <h2>Run</h2>
+        <span id="run-status" class="muted small">idle</span>
+        <span class="spacer"></span>
+        <button id="btn-rerun" class="btn" disabled>Re-run failed</button>
+        <button id="btn-cancel-all" class="btn danger" disabled>Cancel all</button>
+        <button id="btn-start" class="btn primary">
+          <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path d="M4 2.5v11l9-5.5z" fill="currentColor"/></svg>
+          Start
+        </button>
+      </div>
+      <div id="dash" class="dash">
+        <div class="progress-wrap">
+          <div class="progress" role="progressbar" aria-label="Run progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+            <div class="progress-bar" id="prog-bar"></div>
+            <div class="progress-fail" id="prog-fail"></div>
+          </div>
+          <span id="prog-label" class="muted small">Not started</span>
+        </div>
+        <div class="tiles">
+          <div class="tile"><span class="tile-label">Batches</span><span class="tile-value" id="d-batches">—</span></div>
+          <div class="tile"><span class="tile-label">Pages</span><span class="tile-value" id="d-pages">—</span></div>
+          <div class="tile" title="Average prompt-processing speed (images included) per batch"><span class="tile-label">Prefill</span><span class="tile-value" id="d-prefill">—</span></div>
+          <div class="tile" title="Average output speed per batch"><span class="tile-label">Generation</span><span class="tile-value" id="d-speed">—</span></div>
+          <div class="tile"><span class="tile-label">Elapsed</span><span class="tile-value" id="d-elapsed">—</span></div>
+          <div class="tile"><span class="tile-label">Time left</span><span class="tile-value" id="d-eta">—</span></div>
+          <div class="tile spark-tile" data-metric="ram"><span class="tile-label">RAM</span><span class="tile-value" id="d-ram">—</span><svg class="spark" viewBox="0 0 100 24" preserveAspectRatio="none"><path class="spark-area"/><path class="spark-line"/></svg></div>
+          <div class="tile spark-tile" data-metric="vram"><span class="tile-label" id="d-vram-label">VRAM</span><span class="tile-value" id="d-vram">—</span><svg class="spark" viewBox="0 0 100 24" preserveAspectRatio="none"><path class="spark-area"/><path class="spark-line"/></svg></div>
+          <div class="tile spark-tile" data-metric="gpu"><span class="tile-label">GPU</span><span class="tile-value" id="d-gpu">—</span><svg class="spark" viewBox="0 0 100 24" preserveAspectRatio="none"><path class="spark-area"/><path class="spark-line"/></svg></div>
+        </div>
+      </div>
+      <div class="row save-row">
+        <div class="seg" role="radiogroup" aria-label="Save mode">
+          <label><input type="radio" name="save-mode" value="merged" checked><span>Single file</span></label>
+          <label><input type="radio" name="save-mode" value="perbatch"><span>Per-batch files</span></label>
+        </div>
+        <span id="save-preview" class="muted small"></span>
+        <span class="spacer"></span>
+        <span class="muted small">Outputs are cleared when a new run starts or the app closes.</span>
+        <button id="btn-save" class="btn" disabled>Save output…</button>
+      </div>
+    </div>
+    <div class="panel grow">
+      <div class="row">
+        <h2>Batch outputs</h2>
+        <span class="spacer"></span>
+        <div class="seg" role="radiogroup" aria-label="Output view">
+          <label title="Show the Markdown formatted"><input type="radio" name="output-view" value="rendered" checked><span>Rendered</span></label>
+          <label title="Show the Markdown source"><input type="radio" name="output-view" value="raw"><span>Raw</span></label>
+        </div>
+      </div>
+      <div id="run-panels" class="scroll"></div>
+      <div id="run-empty" class="empty">
+        <svg class="empty-icon" viewBox="0 0 64 64" aria-hidden="true">
+          <path d="M16 8h22l10 10v36a2 2 0 0 1-2 2H16a2 2 0 0 1-2-2V10a2 2 0 0 1 2-2z"/>
+          <path d="M38 8v10h10"/>
+          <path d="M22 30h18M22 37h14M22 44h16"/>
+        </svg>
+        <strong>Ready when you are</strong>
+        <ul class="checklist" id="readiness"></ul>
+        <span class="muted">Press Start and each batch's Markdown will stream in here.</span>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<div id="drop-overlay" hidden>
+  <div class="drop-card">
+    <svg class="dz-icon" viewBox="0 0 48 48" aria-hidden="true">
+      <path d="M12 5h17l9 9v27a2 2 0 0 1-2 2H12a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z"/>
+      <path d="M29 5v9h9"/>
+      <path class="dz-arrow" d="M24 21v15m-6-6 6 6 6-6"/>
+    </svg>
+    <strong>Drop to load</strong>
+    <span class="muted">A PDF becomes the source · a .md or .txt file becomes the instructions</span>
+  </div>
+</div>
+
+<div id="toasts" aria-live="polite"></div>
+
+<div id="lightbox" hidden><img id="lightbox-img" alt="page preview"></div>
+
+<script src="stub.js"></script>
+<script src="real-backend.js"></script>
+<script src="backend.js"></script>
+<script src="markdown.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

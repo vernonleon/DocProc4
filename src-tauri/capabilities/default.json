@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Default capabilities for DocProc4",
+  "windows": ["main"],
+  "permissions": ["core:default", "core:event:default"]
+}
