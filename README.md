@@ -18,15 +18,11 @@ npm run dev
 
 You can drag a PDF onto the window to load it, and a .md or .txt file to use it as instructions. The steps across the top show what's done. Tab 4 shows run progress, speed, time left, and memory use. Outputs can be viewed as rendered Markdown or raw text, with the page images alongside.
 
-Optional fast native PDF rendering:
+PDF pages are rendered by MuPDF, which is compiled into the app from source by the `mupdf` crate, so there's nothing extra to install. PDF.js in the webview is the automatic fallback for any PDF MuPDF can't open. MuPDF is AGPL-3.0; that doesn't matter for personal use, but distributing DocProc4 would put it under the AGPL too.
 
-```bash
-sudo apt install mupdf-tools
-```
+Build a release with `npm run build`.
 
-PDF.js remains the automatic fallback. Build a release with npm run build.
-
-Requirements: Rust (via rustup), Node.js, and Tauri's Linux build dependencies (WebKitGTK 4.1 and related packages; see Tauri's prerequisites guide for your distro).
+Requirements: Rust (via rustup), Node.js, a C compiler and clang (MuPDF is built from source), and Tauri's Linux build dependencies (WebKitGTK 4.1 and related packages; see Tauri's prerequisites guide for your distro).
 
 If the project lives on a mount that can't execute binaries (such as pCloud), keep build output on a local disk. Create `src-tauri/.cargo/config.toml` containing `[build]` and `target-dir = "/absolute/local/path"`. That file is git-ignored because it's machine-specific.
 

@@ -16,6 +16,10 @@ tokio = { version = "1", features = ["rt", "sync", "time"] }
 futures-util = "0.3"
 rfd = "0.15"
 base64 = "0.22"
+# PDF rendering, compiled from MuPDF's C source during the build (AGPL-3.0).
+# Only what PDF pages need: the standard 14 fonts, plus system fonts as a
+# fallback for PDFs that don't embed theirs.
+mupdf = { version = "0.8", default-features = false, features = ["base14-fonts", "system-fonts"] }
 
 [profile.release]
 opt-level = 2

@@ -74,7 +74,7 @@ const TauriBackend = (() => {
         pdfSource = null;
         return native.pages.map(page => ({ ...page, sessionId: page.session_id }));
       }
-    } catch (err) { console.info("MuPDF unavailable; using pdf.js renderer:", err); }
+    } catch (err) { console.info("MuPDF couldn't render this PDF; using pdf.js:", err); }
     const lib = await ensurePdfjs();
     const doc = await lib.getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise;
     const { session_id } = await invoke("begin_pdf_render", { fileName: file.name, targetPx: Math.round(targetPx), efficient });

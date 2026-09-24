@@ -396,18 +396,6 @@ fn page_file(dir: &Path, index: usize, full: bool) -> PathBuf {
     dir.join(format!("{kind}-{}.png", index + 1))
 }
 
-fn count_files(dir: &Path, prefix: &str) -> Result<usize, String> {
-    Ok(fs::read_dir(dir)
-        .map_err(|e| e.to_string())?
-        .filter_map(Result::ok)
-        .filter(|e| {
-            let name = e.file_name();
-            let name = name.to_string_lossy();
-            name.starts_with(prefix) && name.ends_with(".png") && !name.contains(".part")
-        })
-        .count())
-}
-
 /// Header value from a binary-body IPC request.
 fn ipc_header(request: &tauri::ipc::Request, name: &str) -> Result<String, String> {
     request
@@ -426,35 +414,44 @@ fn ipc_bytes<'a>(request: &'a tauri::ipc::Request) -> Result<&'a [u8], String> {
     }
 }
 
-/// `mutool draw` all pages, or a page list like "1,3,5-9" (1-based);
-/// use `%d` in `output` when more than one page is drawn.
-fn mutool_draw(
-    input: &Path,
-    output: &Path,
-    size_args: &[&str],
-    pages: Option<&str>,
-) -> Result<(), String> {
-    let mut cmd = std::process::Command::new("mutool");
-    cmd.args(["draw", "-q", "-F", "png"])
-        .args(size_args)
-        .arg("-o")
-        .arg(output)
-        .arg(input);
-    if let Some(pages) = pages {
-        cmd.arg(pages);
-    }
-    let result = cmd
-        .output()
-        .map_err(|e| format!("MuPDF is unavailable ({e}); using pdf.js fallback"))?;
-    if result.status.success() {
-        Ok(())
-    } else {
-        Err(format!(
-            "MuPDF render failed: {}",
-            String::from_utf8_lossy(&result.stderr).trim()
-        ))
-    }
+/// Open a PDF with the bundled MuPDF library. MuPDF contexts are per thread,
+/// so each blocking task opens its own `Document`.
+fn open_pdf(input: &Path) -> Result<mupdf::Document, String> {
+    mupdf::Document::open(input).map_err(|e| format!("MuPDF couldn't open the PDF: {e}"))
 }
+
+/// Page sizes in points, in page order (rotation applied; the area is what matters).
+fn pdf_page_sizes(doc: &mupdf::Document) -> Result<Vec<(f64, f64)>, String> {
+    let count = doc.page_count().map_err(|e| e.to_string())?;
+    (0..count)
+        .map(|i| {
+            let b = doc
+                .load_page(i)
+                .and_then(|page| page.bounds())
+                .map_err(|e| format!("MuPDF couldn't read page {}: {e}", i + 1))?;
+            Ok((f64::from(b.x1 - b.x0).abs(), f64::from(b.y1 - b.y0).abs()))
+        })
+        .collect()
+}
+
+/// Render page `index` (0-based) at `scale` (1.0 = 72 DPI) to a PNG at `out`.
+/// Writes to a temporary name first so readers never see a partial file.
+fn render_page_png(doc: &mupdf::Document, index: usize, scale: f32, out: &Path) -> Result<(), String> {
+    let fail = |e: mupdf::Error| format!("MuPDF couldn't render page {}: {e}", index + 1);
+    let page = doc.load_page(index as i32).map_err(fail)?;
+    // Annotations and form fields are drawn too (show_extras).
+    let pixmap = page
+        .to_pixmap(&mupdf::Matrix::new_scale(scale, scale), &mupdf::Colorspace::device_rgb(), false, true)
+        .map_err(fail)?;
+    let part = out.with_extension("part.png");
+    let mut file = std::io::BufWriter::new(fs::File::create(&part).map_err(|e| e.to_string())?);
+    pixmap.write_to(&mut file, mupdf::ImageFormat::PNG).map_err(fail)?;
+    drop(file);
+    fs::rename(&part, out).map_err(|e| e.to_string())
+}
+
+/// Thumbnail width in pixels.
+const THUMB_WIDTH: f64 = 220.0;
 
 /// Default and bounds for the per-page pixel target. The frontend normally
 /// passes the loaded model's measured image budget.
@@ -475,42 +472,6 @@ fn parse_target_px(value: &str) -> Result<u64, String> {
 fn dpi_for_target(w_pt: f64, h_pt: f64, target_px: u64) -> f64 {
     let area_pt = (w_pt * h_pt).max(1.0);
     (72.0 * (target_px as f64 / area_pt).sqrt()).clamp(MIN_DPI, MAX_DPI)
-}
-
-/// Page sizes in points from `mutool pages` (CropBox when present, else MediaBox).
-fn parse_mutool_pages(output: &str) -> Vec<(f64, f64)> {
-    let attr = |tag: &str, name: &str| -> Option<f64> {
-        let start = tag.find(&format!(" {name}=\""))? + name.len() + 3;
-        let end = start + tag[start..].find('"')?;
-        tag[start..end].trim().parse().ok()
-    };
-    let bbox = |page: &str, kind: &str| -> Option<(f64, f64)> {
-        let start = page.find(&format!("<{kind} "))?;
-        let tag = &page[start..start + page[start..].find('>')?];
-        let (l, b, r, t) = (attr(tag, "l")?, attr(tag, "b")?, attr(tag, "r")?, attr(tag, "t")?);
-        Some(((r - l).abs(), (t - b).abs()))
-    };
-    output
-        .split("<page ")
-        .skip(1)
-        .filter_map(|page| bbox(page, "CropBox").or_else(|| bbox(page, "MediaBox")))
-        .collect()
-}
-
-fn mutool_page_sizes(input: &Path) -> Result<Vec<(f64, f64)>, String> {
-    let output = std::process::Command::new("mutool")
-        .arg("pages")
-        .arg(input)
-        .output()
-        .map_err(|e| format!("MuPDF is unavailable ({e}); using pdf.js fallback"))?;
-    let sizes = parse_mutool_pages(&String::from_utf8_lossy(&output.stdout));
-    if !output.status.success() || sizes.is_empty() {
-        return Err(format!(
-            "could not read page sizes with mutool: {}",
-            String::from_utf8_lossy(&output.stderr).trim()
-        ));
-    }
-    Ok(sizes)
 }
 
 fn image_from_session(
@@ -546,7 +507,7 @@ fn discard_sent_pages(state: &State<AppState>, session_id: &str, indices: &[usiz
     }
 }
 
-/// Render a PDF with MuPDF into an app-owned cache. The PDF bytes are the raw
+/// Render a PDF with the bundled MuPDF library into an app-owned cache. The PDF bytes are the raw
 /// request body; headers carry x-file-name (base64 UTF-8), x-target-px, x-efficient.
 /// Fast mode renders every full-size page now; Efficient mode renders only
 /// thumbnails and leaves full pages to `ensure_full_pages`.
@@ -578,31 +539,20 @@ async fn render_pdf_mupdf(
     // object to this command so AppState itself never crosses the task boundary.
     let session = tokio::task::spawn_blocking(move || -> Result<RenderSession, String> {
         let result = (|| -> Result<RenderSession, String> {
-            let page_dpi: Vec<f64> = mutool_page_sizes(&input)?
-                .into_iter()
-                .map(|(w, h)| dpi_for_target(w, h, target_px))
-                .collect();
-            if !lazy {
-                // One mutool call per distinct resolution (usually just one).
-                let mut groups: Vec<(f64, Vec<String>)> = Vec::new();
-                for (i, &dpi) in page_dpi.iter().enumerate() {
-                    match groups.iter_mut().find(|(d, _)| (*d - dpi).abs() < 0.05) {
-                        Some((_, pages)) => pages.push((i + 1).to_string()),
-                        None => groups.push((dpi, vec![(i + 1).to_string()])),
-                    }
-                }
-                for (dpi, pages) in groups {
-                    mutool_draw(&input, &dir.join("page-%d.png"), &["-r", &format!("{dpi:.1}")], Some(&pages.join(",")))?;
-                }
+            let doc = open_pdf(&input)?;
+            let sizes = pdf_page_sizes(&doc)?;
+            if sizes.is_empty() {
+                return Err("the PDF has no pages".to_string());
             }
-            mutool_draw(&input, &dir.join("thumb-%d.png"), &["-w", "220"], None)?;
-            let count = count_files(&dir, "thumb-")?;
-            if count == 0 || count != page_dpi.len() {
-                return Err(format!(
-                    "MuPDF rendered {count} thumbnails for {} pages",
-                    page_dpi.len()
-                ));
+            let page_dpi: Vec<f64> = sizes.iter().map(|&(w, h)| dpi_for_target(w, h, target_px)).collect();
+            // One page at a time keeps memory to a single full-size image.
+            for (i, &(w, _)) in sizes.iter().enumerate() {
+                if !lazy {
+                    render_page_png(&doc, i, (page_dpi[i] / 72.0) as f32, &page_file(&dir, i, true))?;
+                }
+                render_page_png(&doc, i, (THUMB_WIDTH / w.max(1.0)) as f32, &page_file(&dir, i, false))?;
             }
+            let count = sizes.len();
             Ok(RenderSession {
                 id,
                 dir: dir.clone(),
@@ -711,16 +661,14 @@ async fn ensure_full_pages(
         // One full-size render at a time, even with concurrent batches.
         let state = app.state::<AppState>();
         let _render = state.render_lock.lock().unwrap();
-        let input = dir.join("input.pdf");
+        let doc = open_pdf(&dir.join("input.pdf"))?;
         for index in missing {
             let target = page_file(&dir, index, true);
             if target.exists() {
                 continue;
             }
-            let part = dir.join(format!("page-{}.part.png", index + 1));
             let dpi = page_dpi.get(index).ok_or("missing page size")?;
-            mutool_draw(&input, &part, &["-r", &format!("{dpi:.1}")], Some(&(index + 1).to_string()))?;
-            fs::rename(&part, &target).map_err(|e| e.to_string())?;
+            render_page_png(&doc, index, (dpi / 72.0) as f32, &target)?;
         }
         Ok(Vec::new())
     })
@@ -973,21 +921,23 @@ mod tests {
     }
 
     #[test]
-    fn mutool_pages_parsing() {
-        let out = r#"input.pdf:
-<page pagenum="1">
-<MediaBox l="0" b="0" r="612" t="792" />
-<Rotate v="0" />
-</page>
-<page pagenum="2">
-<MediaBox l="0" b="0" r="842" t="1191" />
-<CropBox l="10" b="20" r="605" t="862" />
-<Rotate v="90" />
-</page>
-"#;
-        let sizes = parse_mutool_pages(out);
-        assert_eq!(sizes, vec![(612.0, 792.0), (595.0, 842.0)]);
-        assert!(parse_mutool_pages("garbage").is_empty());
+    fn mupdf_renders_test_pdf_at_pixel_target() {
+        let input = Path::new(env!("CARGO_MANIFEST_DIR")).join("../ui/test-assets/test.pdf");
+        let doc = open_pdf(&input).expect("open test.pdf");
+        let sizes = pdf_page_sizes(&doc).unwrap();
+        assert_eq!(sizes.len(), 3);
+        let dir = std::env::temp_dir().join(format!("docproc4-test-{}", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        let target = 4_194_304;
+        let dpi = dpi_for_target(sizes[0].0, sizes[0].1, target);
+        let out = dir.join("page.png");
+        render_page_png(&doc, 0, (dpi / 72.0) as f32, &out).unwrap();
+        let png = fs::read(&out).unwrap();
+        let _ = fs::remove_dir_all(&dir);
+        assert_eq!(&png[1..4], b"PNG");
+        let w = u32::from_be_bytes(png[16..20].try_into().unwrap()) as f64;
+        let h = u32::from_be_bytes(png[20..24].try_into().unwrap()) as f64;
+        assert!((w * h - target as f64).abs() / (target as f64) < 0.01, "{w}x{h}");
     }
 
     #[test]
