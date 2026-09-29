@@ -1306,6 +1306,8 @@ function buildRunPanel(i, batch) {
   return panel;
 }
 
+const LOOP_CHECK_EVERY = 500; // characters of new text between repetition checks
+
 async function runBatch(i, batch, instruction, run) {
   const panel = run.panels[i];
   panel.querySelector(".rp-thinking")?.remove(); // clear previous review section
@@ -1332,6 +1334,12 @@ async function runBatch(i, batch, instruction, run) {
   updateDashboard();
   let outputStarted = false;
   let thinkingText = "";
+  // Loop check: re-run the repetition test after every LOOP_CHECK_EVERY new characters.
+  let checkedThinking = 0, checkedOutput = 0;
+  const loopError = (where) => {
+    ctrl.abort(); // stops generation on the server; the thrown error marks the batch failed
+    return new Error(`the model started repeating itself in its ${where}, so the batch was stopped`);
+  };
   try {
     const stream = Backend.streamBatch({
       batch: batch.map(pi => state.pages[pi]),
@@ -1356,6 +1364,10 @@ async function runBatch(i, batch, instruction, run) {
         thinkEl.hidden = false;
         thinkEl.textContent += ev.text;
         thinkEl.scrollTop = thinkEl.scrollHeight;
+        if (thinkingText.length - checkedThinking >= LOOP_CHECK_EVERY) {
+          checkedThinking = thinkingText.length;
+          if (Repetition.detect(thinkingText)) throw loopError("thinking");
+        }
       } else if (ev.type === "output") {
         if (!outputStarted) { // thinking is ephemeral: clear it, switch to output
           outputStarted = true;
@@ -1364,6 +1376,10 @@ async function runBatch(i, batch, instruction, run) {
         }
         run.outputs[i] += ev.text;
         paintOutput(panel, run.outputs[i]);
+        if (run.outputs[i].length - checkedOutput >= LOOP_CHECK_EVERY) {
+          checkedOutput = run.outputs[i].length;
+          if (Repetition.detect(run.outputs[i])) throw loopError("output");
+        }
       } else if (ev.type === "stats") {
         statsEl.hidden = false;
         statsEl.textContent = formatStats(ev.stats);
