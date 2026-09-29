@@ -15,6 +15,7 @@ Tauri 2 desktop app (Rust backend + vanilla JS UI, no framework or bundler) that
 - `ui/index.html`, `ui/styles.css`, `ui/app.js`: the UI. `app.js` holds all state and logic.
 - `ui/real-backend.js`: Tauri bridge. `ui/stub.js`: mock backend used when `index.html` is opened in a plain browser. `ui/backend.js` picks one.
 - `ui/markdown.js`: small, safe Markdown renderer for outputs (escapes all HTML; links render as text).
+- `ui/repetition.js`: detects a model stuck in a loop; `runBatch` uses it to stop and fail the batch.
 - `ui/vendor/`: pdf.js, the fallback renderer if MuPDF can't open a PDF.
 - `packaging/aur/`: PKGBUILD (not published). `.github/workflows/build-installers.yml`: Linux + Windows installers to a draft release.
 
@@ -23,6 +24,7 @@ Tauri 2 desktop app (Rust backend + vanilla JS UI, no framework or bundler) that
 - `npm run dev` and `npm run build` go through `scripts/tauri-local.js`, which sets `NO_STRIP=true` (linuxdeploy's strip breaks on CachyOS libraries).
 - The repo lives on a pCloud mount that can't execute binaries. On Vernon's machine, git-ignored `.cargo/config.toml` files send Cargo output to `~/.cache/docproc4-build/target`, and the Tauri CLI lives in `~/.cache/docproc4-build/npm`.
 - Rust tests: `cargo test` in `src-tauri/` (13 tests, including a real MuPDF render of `ui/test-assets/test.pdf`).
+- Loop detector (`ui/repetition.js`): `node scripts/test-repetition.js`.
 - UI: serve `ui/` over HTTP (e.g. `python3 -m http.server --directory ui`) and use the mock backend. `?demo=visual|panels` fills demo data.
 - Real-app checks: build a scratch copy with `TAURI_CONFIG` pointing the window at a test page, and use a fake OpenAI server. Don't point tests at Vernon's real Lemonade server without asking.
 
