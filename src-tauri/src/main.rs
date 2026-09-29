@@ -960,6 +960,18 @@ mod tests {
     }
 
     #[test]
+    fn atomic_write_replaces_file_and_leaves_no_temp() {
+        let dir = std::env::temp_dir().join(format!("docproc4-atomic-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("last-run.json");
+        write_atomic(&path, r#"{"v":1}"#).unwrap();
+        write_atomic(&path, r#"{"v":2}"#).unwrap();
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), r#"{"v":2}"#);
+        assert!(!path.with_extension("json.tmp").exists());
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
     fn error_body_extraction() {
         // Lemonade's HTTP-200 error body shape
         let v = json!({"error":{"code":400,"message":"request (4055 tokens) exceeds the available context size (3328 tokens)","type":"exceed_context_size_error"}});
@@ -1331,6 +1343,60 @@ fn write_instructions(app: AppHandle, data: Value) -> Result<(), String> {
 }
 
 // ---------------------------------------------------------------------------
+// Run recovery: finished batches are written to the app data dir as they
+// complete, so a crash or kill doesn't lose them before the user saves.
+// ---------------------------------------------------------------------------
+
+const RECOVERY_FILE: &str = "last-run.json";
+
+/// Serializes recovery writes: concurrent batches can finish together.
+static RECOVERY_LOCK: Mutex<()> = Mutex::new(());
+
+fn recovery_dir(app: &AppHandle) -> Result<PathBuf, String> {
+    let dir = app.path().app_data_dir().map_err(|e| e.to_string())?.join("recovery");
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    Ok(dir)
+}
+
+/// Write to a temporary file, flush it to disk, then rename it over the
+/// target, so a kill mid-write leaves the previous version intact.
+fn write_atomic(path: &Path, contents: &str) -> Result<(), String> {
+    use std::io::Write;
+    let tmp = path.with_extension("json.tmp");
+    let mut f = std::fs::File::create(&tmp).map_err(|e| e.to_string())?;
+    f.write_all(contents.as_bytes()).map_err(|e| e.to_string())?;
+    f.sync_all().map_err(|e| e.to_string())?;
+    drop(f);
+    std::fs::rename(&tmp, path).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn write_recovery(app: AppHandle, data: Value) -> Result<(), String> {
+    let s = serde_json::to_string(&data).map_err(|e| e.to_string())?;
+    let _guard = RECOVERY_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    write_atomic(&recovery_dir(&app)?.join(RECOVERY_FILE), &s)
+}
+
+#[tauri::command]
+fn read_recovery(app: AppHandle) -> Result<Value, String> {
+    let path = recovery_dir(&app)?.join(RECOVERY_FILE);
+    Ok(std::fs::read_to_string(path)
+        .ok()
+        .and_then(|s| serde_json::from_str(&s).ok())
+        .unwrap_or(Value::Null))
+}
+
+#[tauri::command]
+fn clear_recovery(app: AppHandle) -> Result<(), String> {
+    let _guard = RECOVERY_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let path = recovery_dir(&app)?.join(RECOVERY_FILE);
+    match std::fs::remove_file(path) {
+        Err(e) if e.kind() != std::io::ErrorKind::NotFound => Err(e.to_string()),
+        _ => Ok(()),
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Output saving via native dialogs
 // ---------------------------------------------------------------------------
 
@@ -1415,6 +1481,9 @@ fn main() {
             write_settings,
             write_instructions,
             save_outputs,
+            write_recovery,
+            read_recovery,
+            clear_recovery,
         ])
         .on_window_event(|window, event| {
             if let WindowEvent::CloseRequested { .. } = event {

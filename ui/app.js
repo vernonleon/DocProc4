@@ -1200,8 +1200,8 @@ function bindSaveMode() {
   });
 }
 
-function pdfBase() {
-  return state.pdfName ? state.pdfName.replace(/\.pdf$/i, "") : "output";
+function pdfBase(name = state.pdfName) {
+  return name ? name.replace(/\.pdf$/i, "") : "output";
 }
 
 function updateSavePreview() {
@@ -1248,6 +1248,11 @@ function paintOutput(panel, text) {
 
 /** Side-by-side view: the batch's page images next to its output. */
 function togglePanelPages(panel, batch) {
+  const run = state.currentRun;
+  if (run?.restored && !restoredPdfLoaded(run)) {
+    toast(`Load ${run.pdfName} again in step 1 to see its pages.`, "error");
+    return;
+  }
   const on = !panel.classList.contains("with-pages");
   panel.classList.toggle("with-pages", on);
   panel.querySelector(".rp-pages-btn").classList.toggle("on", on);
@@ -1375,6 +1380,7 @@ async function runBatch(i, batch, instruction, run) {
     }
     statusEl.textContent = "done"; statusEl.className = "rp-status done";
     run.done[i] = true;
+    persistRecovery(run);
     // keep the finished thinking reviewable in a collapsed section
     if (thinkingText) {
       const det = document.createElement("details");
@@ -1432,6 +1438,91 @@ function maybeFinishRun(run) {
   if (run.cancelled) toast(done ? `Run cancelled · ${plural(done, "batch", "batches")} finished` : "Run cancelled");
   else if (failed) toast(`Finished with ${plural(failed, "failed batch", "failed batches")}. Use Re-run failed to try ${failed === 1 ? "it" : "them"} again.`, "error");
   else toast(`Finished ${plural(done, "batch", "batches")} in ${fmtDuration(run.finishedAt - run.startedAt)}`, "success");
+}
+
+/* ---- unsaved-run recovery ----
+ * Each finished batch rewrites one recovery file in the app data folder, so a
+ * crash or kill before Save can be restored on the next launch. It is removed
+ * on Save, on Discard, and when a new run starts. */
+let recoveryQueue = Promise.resolve(); // keeps writes in order: an older snapshot never lands last
+function persistRecovery(run) {
+  const snapshot = {
+    version: 1,
+    savedAt: Date.now(),
+    pdfName: run.pdfName,
+    pageCount: run.pageCount,
+    model: run.model,
+    instruction: run.instruction,
+    thinking: run.thinking,
+    batches: run.batches,
+    outputs: run.batches.map((_, i) => (run.done[i] ? run.outputs[i] : null)),
+  };
+  recoveryQueue = recoveryQueue
+    .then(() => Backend.writeRecovery(snapshot))
+    .catch(err => {
+      console.warn("Couldn't write the recovery file:", err);
+      if (!run.recoveryWarned) {
+        run.recoveryWarned = true;
+        toast(`Couldn't back up finished batches: ${err}. Save before closing.`, "error");
+      }
+    });
+}
+function discardRecovery() {
+  $("#recovery-banner").hidden = true;
+  recoveryQueue = recoveryQueue.then(() => Backend.clearRecovery());
+}
+/** A restored run can re-run or show pages only once its PDF is loaded again. */
+function restoredPdfLoaded(run) {
+  return state.pdfName === run.pdfName && state.pages.length === run.pageCount && !state.converting;
+}
+
+async function offerRecovery() {
+  const rec = await Backend.readRecovery();
+  if (!rec || !Array.isArray(rec.batches) || !Array.isArray(rec.outputs)) return;
+  const done = rec.outputs.filter(o => typeof o === "string").length;
+  if (!done) { discardRecovery(); return; }
+  const when = new Date(rec.savedAt).toLocaleString();
+  $("#recovery-text").textContent =
+    `Unsaved run from ${rec.pdfName || "a PDF"}: ${done} of ${plural(rec.batches.length, "batch", "batches")} finished (${when}).`;
+  $("#recovery-banner").hidden = false;
+  $("#btn-recovery-restore").onclick = () => { $("#recovery-banner").hidden = true; restoreRun(rec); };
+  $("#btn-recovery-discard").onclick = () => { discardRecovery(); toast("Discarded the unsaved run"); };
+}
+
+function restoreRun(rec) {
+  if (state.running) { toast("Wait for the current run to finish before restoring.", "error"); return; }
+  const container = $("#run-panels");
+  container.innerHTML = "";
+  container.hidden = false;
+  $("#run-empty").hidden = true;
+  const run = {
+    panels: [], outputs: [], done: [], controllers: [], speeds: [], prefill: [], cancelled: false,
+    batches: rec.batches, instruction: rec.instruction, model: rec.model, thinking: rec.thinking,
+    pdfName: rec.pdfName, pageCount: rec.pageCount, restored: true,
+  };
+  rec.batches.forEach((b, i) => {
+    const panel = buildRunPanel(i, b);
+    const out = rec.outputs[i];
+    const done = typeof out === "string";
+    const status = panel.querySelector(".rp-status");
+    status.textContent = done ? "restored" : "not run";
+    status.className = "rp-status " + (done ? "done" : "cancelled");
+    panel.querySelector(".rp-cancel").disabled = true;
+    paintOutput(panel, done ? out : "");
+    container.appendChild(panel);
+    run.panels.push(panel); run.outputs.push(done ? out : ""); run.done.push(done); run.controllers.push(null);
+  });
+  state.currentRun = run;
+  const missing = failedIndices(run).length;
+  $("#btn-save").disabled = false;
+  $("#btn-rerun").disabled = !missing;
+  $("#run-status").textContent = missing
+    ? `restored, not saved yet · load ${rec.pdfName} again to re-run the ${plural(missing, "unfinished batch", "unfinished batches")}`
+    : "restored, not saved yet";
+  selectTab("tab4");
+  updateDashboard();
+  updateSteps();
+  toast(`Restored the run from ${rec.pdfName}`, "success");
 }
 
 async function runIndices(run, indices) {
@@ -1509,11 +1600,33 @@ function updateDashboard() {
     : remaining === 0 ? "finishing…" : "estimating…";
 }
 
-$("#btn-rerun").addEventListener("click", () => {
+$("#btn-rerun").addEventListener("click", async () => {
   const run = state.currentRun;
   if (!run || state.running) return;
   const failed = failedIndices(run);
   if (!failed.length) return;
+  if (run.restored && !restoredPdfLoaded(run)) {
+    toast(`Load ${run.pdfName} (${plural(run.pageCount, "page")}) in step 1 first, then re-run.`, "error");
+    return;
+  }
+  if (run.restored && Backend._state.loadedModel !== run.model) {
+    state.running = true;
+    $("#btn-rerun").disabled = true;
+    $("#btn-start").disabled = true;
+    $("#run-status").textContent = `loading ${run.model}… (large models can take a minute)`;
+    try {
+      await Backend.loadModel(run.model, loadOptions());
+      await checkHealth();
+      updateLoadedPill();
+    } catch (err) {
+      state.running = false;
+      $("#btn-rerun").disabled = false;
+      $("#btn-start").disabled = false;
+      $("#run-status").textContent = "load failed: " + (err.message || err);
+      toast(`Couldn't load ${run.model}: ${err.message || err}`, "error");
+      return;
+    }
+  }
   state.running = true;
   run.cancelled = false;
   run.finishedAt = undefined;
@@ -1578,6 +1691,9 @@ async function startRun() {
   $("#btn-cancel-all").disabled = false;
   $("#btn-save").disabled = true;
   $("#btn-rerun").disabled = true;
+  discardRecovery(); // a new run replaces any unsaved one
+  run.pdfName = state.pdfName;
+  run.pageCount = state.pages.length;
   run.batches = batches;
   run.instruction = instruction;
   run.model = model; // immutable choice used by every initial/re-run request
@@ -1662,7 +1778,7 @@ $("#btn-cancel-all").addEventListener("click", async () => {
 $("#btn-save").addEventListener("click", async () => {
   const run = state.currentRun;
   if (!run) return;
-  const base = pdfBase();
+  const base = pdfBase(run.pdfName);
   const n = run.outputs.length;
   const completed = run.outputs.map((t, i) => ({ t, i })).filter(x => run.done[x.i] && x.t.trim());
   if (!completed.length) { toast("No completed batches to save.", "error"); return; }
@@ -1674,6 +1790,7 @@ $("#btn-save").addEventListener("click", async () => {
     const res = await Backend.saveOutputs(merged, files);
     if (res.saved.length) {
       $("#run-status").textContent = `saved: ${res.saved.join(", ")}`;
+      discardRecovery();
       toast(res.saved.length === 1 ? `Saved ${res.saved[0]}` : `Saved ${res.saved.length} files`, "success");
     } else {
       $("#run-status").textContent = "save cancelled";
@@ -1737,6 +1854,7 @@ function clampInt(v, lo, hi, dflt) {
   // demo mode for visual review: ?demo=fixed | ?demo=visual | ?demo=panels
   const demo = new URLSearchParams(location.search).get("demo");
   if (demo) demoPopulate(demo);
+  else offerRecovery().catch(err => console.warn("Couldn't read the recovery file:", err));
   // e2e self-test against the live Lemonade server: window.__E2E__ (e2e.html)
   if (window.__E2E__) runE2E();
 })();

@@ -22,7 +22,7 @@ Tauri 2 desktop app (Rust backend + vanilla JS UI, no framework or bundler) that
 
 - `npm run dev` and `npm run build` go through `scripts/tauri-local.js`, which sets `NO_STRIP=true` (linuxdeploy's strip breaks on CachyOS libraries).
 - The repo lives on a pCloud mount that can't execute binaries. On Vernon's machine, git-ignored `.cargo/config.toml` files send Cargo output to `~/.cache/docproc4-build/target`, and the Tauri CLI lives in `~/.cache/docproc4-build/npm`.
-- Rust tests: `cargo test` in `src-tauri/` (13 tests, including a real MuPDF render of `ui/test-assets/test.pdf`).
+- Rust tests: `cargo test` in `src-tauri/` (14 tests, including a real MuPDF render of `ui/test-assets/test.pdf`).
 - UI: serve `ui/` over HTTP (e.g. `python3 -m http.server --directory ui`) and use the mock backend. `?demo=visual|panels` fills demo data.
 - Real-app checks: build a scratch copy with `TAURI_CONFIG` pointing the window at a test page, and use a fake OpenAI server. Don't point tests at Vernon's real Lemonade server without asking.
 
@@ -33,6 +33,7 @@ Tauri 2 desktop app (Rust backend + vanilla JS UI, no framework or bundler) that
 - **Fast / Efficient mode** (rabbit/turtle in the title bar). Efficient renders only thumbnails up front, on disk; full pages render one at a time just before sending and are deleted after.
 - **Thinking effort:** None / Low / Medium / High / X-High are sent as `reasoning_effort` (top-level and in `chat_template_kwargs`). "None (Qwen 3)" sends `chat_template_kwargs.enable_thinking=false`, because Qwen's template rejects unknown effort values. He mostly uses Qwen 3.x models.
 - **Concurrent evaluations** also sets llama.cpp `--parallel` when load options are sent. On ROCm, concurrent batches make the model loop ("////"); Vernon runs 1 on ROCm and declined an in-app warning.
+- **Run recovery:** each finished batch rewrites `recovery/last-run.json` in the app data dir (atomic temp-file + rename). Launch offers Restore/Discard; the file is removed on Save, Discard or a new Start. Page images are not kept, so re-running unfinished batches needs the same PDF (name + page count) loaded again.
 - **Licensing:** MuPDF is AGPL-3.0, so DocProc4 is `AGPL-3.0-or-later` (LICENSE file). The GitHub repo is private; AUR packaging is prepared but not published.
 
 ## Releases
