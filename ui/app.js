@@ -29,6 +29,8 @@ const SETTINGS_DEFAULTS = {
   repeatPenalty: 1.1, presencePenalty: 0,
   seed: "", // "" = random (not sent)
   batchZoom: 165,
+  batchMode: "fixed", fixedN: 3, // Tab 2 batching choices, remembered between uses
+  instructionText: "",           // last instruction editor contents
   conc: 2, sendParams: false,
   saveMode: "merged",
   efficientMode: false,
@@ -287,7 +289,7 @@ function loadInstructionFile(file) {
   const reader = new FileReader();
   reader.onload = () => {
     $("#instruction-editor").value = reader.result;
-    updateSteps();
+    saveInstructionText();
     toast(`Instructions loaded from ${file.name}`, "success");
   };
   reader.onerror = () => toast(`Couldn't read ${file.name}`, "error");
@@ -299,7 +301,17 @@ $("#md-input").addEventListener("change", (e) => {
   const file = e.target.files[0];
   if (file) loadInstructionFile(file);
 });
-$("#instruction-editor").addEventListener("input", () => updateSteps());
+// Remember the editor text between uses; debounced so typing doesn't write on every key.
+let instructionSaveTimer = null;
+function saveInstructionText() {
+  clearTimeout(instructionSaveTimer);
+  instructionSaveTimer = setTimeout(() => {
+    settings.instructionText = $("#instruction-editor").value;
+    saveSettings();
+  }, 500);
+  updateSteps();
+}
+$("#instruction-editor").addEventListener("input", saveInstructionText);
 
 function refreshInstructionSelect() {
   const sel = $("#instruction-select");
@@ -315,7 +327,7 @@ $("#instruction-select").addEventListener("change", (e) => {
   const name = e.target.value;
   if (name && instructionSets[name] != null) {
     $("#instruction-editor").value = instructionSets[name];
-    updateSteps();
+    saveInstructionText();
   }
 });
 
@@ -374,19 +386,29 @@ function handleDroppedFiles(files) {
 
 /* ================= Tab 2: batching ================= */
 
-$$('input[name="batch-mode"]').forEach(r => r.addEventListener("change", (e) => {
-  state.batchMode = e.target.value;
+function applyBatchMode(mode) {
+  state.batchMode = mode === "visual" ? "visual" : "fixed";
+  $(`input[name="batch-mode"][value="${state.batchMode}"]`).checked = true;
   $("#tab2").dataset.mode = state.batchMode;
   const visual = state.batchMode === "visual";
   $("#visual-hint").hidden = !visual;
   $("#btn-next-batch").hidden = !visual;
   $("#btn-clear-batches").hidden = !visual;
   decorateThumbs(); renderBatches();
+}
+
+$$('input[name="batch-mode"]').forEach(r => r.addEventListener("change", (e) => {
+  applyBatchMode(e.target.value);
+  settings.batchMode = state.batchMode;
+  saveSettings();
 }));
 
+// No upper limit: a number larger than the PDF simply makes one batch.
 $("#fixed-n").addEventListener("change", (e) => {
-  state.fixedN = clampInt(e.target.value, 1, 20, 3);
+  state.fixedN = clampInt(e.target.value, 1, Infinity, 3);
   e.target.value = state.fixedN;
+  settings.fixedN = state.fixedN;
+  saveSettings();
   decorateThumbs(); renderBatches();
 });
 
@@ -813,6 +835,17 @@ $("#btn-fetch-models").addEventListener("click", async () => {
     toast(`Couldn't fetch models: ${err.message || err}`, "error");
   }
 });
+
+/** Show the remembered model in the dropdown before the list is fetched again. */
+function showSavedModel() {
+  if (!settings.model) return;
+  const sel = $("#model-select");
+  sel.innerHTML = "";
+  const opt = document.createElement("option");
+  opt.value = settings.model; opt.textContent = settings.model;
+  sel.appendChild(opt);
+  sel.value = settings.model;
+}
 
 $("#model-select").addEventListener("change", e => { settings.model = e.target.value; saveSettings(); });
 
@@ -1720,9 +1753,12 @@ function clampInt(v, lo, hi, dflt) {
     store: "paramPresets", keys: PARAM_PRESET_KEYS, sync: syncParamsUI, label: "parameter" });
   bindSaveMode();
   applyProcessingMode(settings.efficientMode);
+  state.fixedN = clampInt(settings.fixedN, 1, Infinity, 3);
   $("#fixed-n").value = state.fixedN;
+  $("#instruction-editor").value = settings.instructionText || "";
   applyBatchZoom(settings.batchZoom);
-  $("#tab2").dataset.mode = state.batchMode;
+  applyBatchMode(settings.batchMode);
+  showSavedModel();
   $("#run-panels").hidden = true;
   refreshInstructionSelect();
   showPdfCard();
