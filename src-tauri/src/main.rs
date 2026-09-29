@@ -727,8 +727,8 @@ const HOLD_BACK: usize = 11;
 /// Reported when the server stops generation with finish_reason=length —
 /// the output is incomplete even though the request "succeeded".
 const TRUNCATED_MSG: &str = "output truncated: the model hit the server's context/output-token limit \
-(finish_reason=length). Reload the model with a larger context size, lower the page DPI, use smaller \
-batches, or reduce concurrency (llama.cpp splits the context across --parallel slots).";
+(finish_reason=length). Reload the model with a larger context size, lower the thinking effort, use \
+smaller batches, or reduce concurrency (llama.cpp splits the context across --parallel slots).";
 
 /// Largest index `<= i` that is a UTF-8 char boundary of `s`.
 /// (Stable replacement for the unstable `str::floor_char_boundary`.)
