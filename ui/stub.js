@@ -168,6 +168,10 @@ const StubBackend = (() => {
   }
   async function persistSettings(s) { localStorage.setItem(SETTINGS_KEY, JSON.stringify(s)); }
   async function persistInstructions(i) { localStorage.setItem(INSTR_KEY, JSON.stringify(i)); }
+  const RECOVERY_KEY = "docproc4.recovery";
+  async function readRecovery() { try { return JSON.parse(localStorage.getItem(RECOVERY_KEY) || "null"); } catch { return null; } }
+  async function writeRecovery(data) { localStorage.setItem(RECOVERY_KEY, JSON.stringify(data)); }
+  async function clearRecovery() { localStorage.removeItem(RECOVERY_KEY); }
 
   // --- save outputs: browser download fallback ---
   async function saveOutputs(merged, files) {
@@ -185,5 +189,6 @@ const StubBackend = (() => {
   function configure() { /* no-op in stub */ }
 
   return { convertPdf, promptTokens, health, listModels, loadModel, unloadModel, systemStats, streamBatch,
-           loadPersisted, persistSettings, persistInstructions, saveOutputs, configure, _state: state };
+           loadPersisted, persistSettings, persistInstructions, saveOutputs,
+           readRecovery, writeRecovery, clearRecovery, configure, _state: state };
 })();

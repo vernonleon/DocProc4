@@ -35,6 +35,7 @@ Tauri 2 desktop app (Rust backend + vanilla JS UI, no framework or bundler) that
 - **Fast / Efficient mode** (rabbit/turtle in the title bar). Efficient renders only thumbnails up front, on disk; full pages render one at a time just before sending and are deleted after.
 - **Thinking effort:** None / Low / Medium / High / X-High are sent as `reasoning_effort` (top-level and in `chat_template_kwargs`). "None (Qwen 3)" sends `chat_template_kwargs.enable_thinking=false`, because Qwen's template rejects unknown effort values. He mostly uses Qwen 3.x models.
 - **Concurrent evaluations** also sets llama.cpp `--parallel` when load options are sent. On ROCm, concurrent batches make the model loop ("////"); Vernon runs 1 on ROCm and declined an in-app warning.
+- **Run recovery:** each finished batch rewrites `recovery/last-run.json` in the app data dir (atomic temp-file + rename). Launch offers Restore/Discard; the file is removed on Save, Discard or a new Start. Page images are not kept, so re-running unfinished batches needs the same PDF (name + page count) loaded again.
 - **Licensing:** MuPDF is AGPL-3.0, so DocProc4 is `AGPL-3.0-or-later` (LICENSE file). The GitHub repo is private; AUR packaging is prepared but not published.
 
 ## Releases

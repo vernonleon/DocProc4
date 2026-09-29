@@ -84,6 +84,11 @@
 </header>
 
 <main>
+  <div id="recovery-banner" class="recovery-banner" role="alert" hidden>
+    <span id="recovery-text"></span>
+    <button id="btn-recovery-discard" class="btn danger">Discard</button>
+    <button id="btn-recovery-restore" class="btn primary">Restore</button>
+  </div>
 
   <!-- ============ TAB 1: Upload & Instructions ============ -->
   <section id="tab1" class="tab-panel active">
@@ -333,7 +338,7 @@
         </div>
         <span id="save-preview" class="muted small"></span>
         <span class="spacer"></span>
-        <span class="muted small">Outputs are cleared when a new run starts or the app closes.</span>
+        <span class="muted small">Finished batches are backed up until you save. A new run replaces them.</span>
         <button id="btn-save" class="btn" disabled>Save output…</button>
       </div>
     </div>

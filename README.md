@@ -16,7 +16,7 @@ source ~/.cargo/env
 npm run dev
 ```
 
-You can drag a PDF onto the window to load it, and a .md or .txt file to use it as instructions. The steps across the top show what's done. Tab 4 shows run progress, speed, time left, and memory use. Outputs can be viewed as rendered Markdown or raw text, with the page images alongside.
+You can drag a PDF onto the window to load it, and a .md or .txt file to use it as instructions. The steps across the top show what's done. Tab 4 shows run progress, speed, time left, and memory use. Outputs can be viewed as rendered Markdown or raw text, with the page images alongside. Each finished batch is backed up to the app's data folder until you save, so if the app crashes or is closed first, it offers to restore that run on the next launch. Unfinished batches can be re-run after you load the same PDF again.
 
 PDF pages are rendered by MuPDF, which is compiled into the app from source by the `mupdf` crate, so there's nothing extra to install. PDF.js in the webview is the automatic fallback for any PDF MuPDF can't open. MuPDF is AGPL-3.0; that doesn't matter for personal use, but distributing DocProc4 would put it under the AGPL too.
 

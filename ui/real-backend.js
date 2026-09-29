@@ -276,7 +276,12 @@ const TauriBackend = (() => {
   const persistSettings = (s) => invoke("write_settings", { data: s }).catch(() => {});
   const persistInstructions = (i) => invoke("write_instructions", { data: i }).catch(() => {});
   const saveOutputs = (merged, files) => invoke("save_outputs", { merged, files });
+  // Unsaved-run recovery file (app data dir), rewritten as each batch finishes.
+  const readRecovery = () => invoke("read_recovery").catch(() => null);
+  const writeRecovery = (data) => invoke("write_recovery", { data });
+  const clearRecovery = () => invoke("clear_recovery").catch(() => {});
 
   return { convertPdf, thumbnail, preview, clearPdf, health, listModels, loadModel, unloadModel, systemStats, streamBatch, promptTokens,
-           loadPersisted, persistSettings, persistInstructions, saveOutputs, configure, _state };
+           loadPersisted, persistSettings, persistInstructions, saveOutputs,
+           readRecovery, writeRecovery, clearRecovery, configure, _state };
 })();
